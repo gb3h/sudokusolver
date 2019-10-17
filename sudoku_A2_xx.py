@@ -52,6 +52,13 @@ class Sudoku(object):
                         return False
             return True
 
+        def finishable(self):
+            for row in self.puzzle:
+                for square in row:
+                    if (not square.fixed) and (len(square.domain) == 0):
+                        return False
+            return True
+
         def __str__(self):
             res = ""
             for row in self.puzzle:
@@ -93,6 +100,18 @@ class Sudoku(object):
                 curr = heappop(pq)
             print(count)
 
+    def dfs(self, node):
+        node.init_arc_consistency()
+        if node.is_finished():
+            return node
+        elif node.finishable():
+            for item in node.generate_search_queue():
+                new_node = node.replace(item)
+                res = self.dfs(new_node)
+            return res
+        else:
+            return
+
     def solve(self):
         #TODO: Your code here
         squre_form = list()
@@ -121,6 +140,10 @@ class Sudoku(object):
         print(initial_node)
         initial_node.init_arc_consistency()
         print(initial_node)
+
+        ans = self.dfs(initial_node)
+
+
         # don't print anything here. just resturn the answer
         # self.ans is a list of lists
         return self.ans
