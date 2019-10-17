@@ -1,3 +1,4 @@
+import time
 import sys
 import copy
 import itertools
@@ -12,6 +13,7 @@ class Sudoku(object):
 
     def __init__(self, puzzle):
         self.puzzle = puzzle
+        self.count = 0
         self.ans = copy.deepcopy(puzzle)
         self.squares = [x for x in range(0, 81)]
         self.domains = {}
@@ -128,6 +130,7 @@ class Sudoku(object):
             return True
 
         def backtrack(fixed_list, sudoku):
+            sudoku.count += 1
             if len(fixed_list) == len(sudoku.squares):
                 return fixed_list
             var = select_unassigned_variable(fixed_list, sudoku)
@@ -204,9 +207,12 @@ if __name__ == "__main__":
                     i += 1
                     j = 0
 
+    a = time.time()
     sudoku = Sudoku(puzzle)
     ans = sudoku.solve()
-
+    b = time.time()
+    print("Time taken:", b-a)
+    print("Backtracking calls:", sudoku.count)
     with open(sys.argv[2], 'a') as f:
         for i in range(9):
             for j in range(9):
