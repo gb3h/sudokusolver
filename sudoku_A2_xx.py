@@ -41,9 +41,13 @@ class Sudoku(object):
         def row(self, square):
             return square.id // 9
         # helper functions to get a node's square 0-8
-        def get_square(self, square):
+        def get_box(self, square):
             c = [[0,1,2],[3,4,5],[6,7,8]]
             return c[self.row(square)//3][self.col(square)//3]
+        def from_box_to_coord(self, box):
+            c = [[0,0], [0,3], [0,6], [3,0], [3,3], [3,6], [6,0], [6,3], [6,6]]
+            return c[box]
+
 
         def is_finished(self):
             for row in self.puzzle:
@@ -72,16 +76,18 @@ class Sudoku(object):
             for row in self.puzzle:
                 for square in row:
                     if square.fixed:
+                        print(square.id)
                         heappush(pq, square)
             
-            curr = heappop(pq)
             count = 0
             while (len(pq) > 0):
+                #print("asd ", len(pq))
+
+                curr = heappop(pq)
                 count += 1
                 row = self.row(curr)
                 col = self.col(curr)
-                sq = self.get_square(curr)
-                print("ID =", curr.id, "Val =", curr.value, row, col, sq)
+                #print("ID =", curr.id, "Val =", curr.value, "|||", row, col, sq)
                 for other in self.puzzle[row]:
                     other.constrict(curr.value)
                     if len(other.domain) == 1:
@@ -91,14 +97,26 @@ class Sudoku(object):
                         heappush(pq, other)
                 for a in self.puzzle:
                     other = a[col]
+                    if (other.id == 1):
+                        print(curr.id)
                     other.constrict(curr.value)
                     if len(other.domain) == 1:
                         other.value = other.domain[0]
                         other.fixed = True
                         other.domain = []
                         heappush(pq, other)
-                curr = heappop(pq)
-            print(count)
+                coord = self.from_box_to_coord(self.get_box(curr))
+                for i in range(0, 3):
+                    for j in range(0, 3):
+                        x = coord[0] + i
+                        y = coord[1] + j
+                        other = self.puzzle[x][y]
+                        other.constrict(curr.value)
+                        if len(other.domain) == 1:
+                            other.value = other.domain[0]
+                            other.fixed = True
+                            other.domain = []
+                            heappush(pq, other)
 
     def dfs(self, node):
         node.init_arc_consistency()
@@ -141,7 +159,7 @@ class Sudoku(object):
         initial_node.init_arc_consistency()
         print(initial_node)
 
-        ans = self.dfs(initial_node)
+        #ans = self.dfs(initial_node)
 
 
         # don't print anything here. just resturn the answer
