@@ -1,288 +1,181 @@
 import sys
 import copy
+import itertools
 from heapq import heappush, heappop
 
 class Sudoku(object):
+    def __str__(self):
+        return str(self.domains)
+
+    def get(self, index):
+        return self.puzzle[index//9][index%9]
+
     def __init__(self, puzzle):
-        # you may add more attributes if you need
-        self.puzzle = puzzle # self.puzzle is a list of lists
-        self.ans = copy.deepcopy(puzzle) # self.ans is a list of lists
+        self.puzzle = puzzle
+        self.ans = copy.deepcopy(puzzle)
+        self.squares = [x for x in range(0, 81)]
+        self.domains = {}
+        index = 0
+        for row in self.puzzle:
+            for num in row:
+                if (num == 0):
+                    self.domains[index] = [x for x in range(1,10)]
+                else:
+                    self.domains[index] = [num]
+                index += 1
 
-    class Square(object):
-        # A data representation of a single square
-        # Holds an id (0-63) and a domain
-        def __init__(self, id, domain, fixed, value):
-            self.id = id
-            self.domain = copy.deepcopy(domain)
-            self.fixed = fixed
-            self.value = value
+        self.neighbours = dict()
+        for i in range(0, 81):
+            row = Sudoku.row(i)
+            col = Sudoku.col(i)
+            sq = Sudoku.get_box(i)
+            self.neighbours[i] = [x for x in range(0,81) if (Sudoku.row(x) == row) or (Sudoku.col(x) == col) or (Sudoku.get_box(x) == sq)]
 
-        # Constrict removes a list of values from its own domain
-        def constrict(self, constraint):
-            if constraint in self.domain:
-                self.domain.remove(constraint)
+        self.temp = dict()
+        for i in self.squares:
+            if self.get(i) == 0:
+                self.temp[i] = list()
+            else:
+                self.temp[i] = [self.get(i)]
 
-        # Comparator for our priority queue
-        def __lt__(self, other):
-            return len(self.domain) < len(other.domain)
-        
-        def __str__(self):
-            return str(self.value) if self.fixed else str(self.domain)
+    @staticmethod
+    def col(id):
+        return id % 9
+    # helper functions to get a node's row index 0-8
+    @staticmethod
+    def row(id):
+        return id // 9
+    # helper functions to get a node's square 0-8
+    @staticmethod
+    def get_box(id):
+        c = [[0,1,2],[3,4,5],[6,7,8]]
+        return c[Sudoku.row(id)//3][Sudoku.col(id)//3]
+    @staticmethod
+    def from_box_to_coord(box):
+        c = [[0,0], [0,3], [0,6], [3,0], [3,3], [3,6], [6,0], [6,3], [6,6]]
+        return c[box]
 
-    class SudokuNode(object):
-        def __init__(self, puzzleNode, past_actions=list()):
-            self.puzzle = puzzleNode#copy.deepcopy(puzzleNode)
-            self.past_actions = past_actions
-        
-        # helper functions to get a node's col index 0-8
-        def col(self, square):
-            return square.id % 9
-        # helper functions to get a node's row index 0-8
-        def row(self, square):
-            return square.id // 9
-        # helper functions to get a node's square 0-8
-        def get_box(self, square):
-            c = [[0,1,2],[3,4,5],[6,7,8]]
-            return c[self.row(square)//3][self.col(square)//3]
-        def from_box_to_coord(self, box):
-            c = [[0,0], [0,3], [0,6], [3,0], [3,3], [3,6], [6,0], [6,3], [6,6]]
-            return c[box]
+    def finished(self):
+        for x in self.squares:
+            if len(self.domains[x]) > 1:
+                return False
+        return True
 
+    def finishable(self, fixed_list):
+        for x in self.squares:
+            if len(self.domains[x]) > 1 and x not in fixed_list:
+                return False
+        return True
 
-        def is_finished(self):
-            for row in self.puzzle:
-                for square in row:
-                    if not square.fixed:
-                        return False
-            return True
+    def consistent(self, fixed_list, sq, value):
+        for key, val in fixed_list.items():
+            if val == value and key in self.neighbours[sq]:
+                consistent = False
+        return True 
 
-        def finishable(self):
-            for row in self.puzzle:
-                for square in row:
-                    if (not square.fixed) and (len(square.domain) == 0):
-                        return False
-            return True
+    def assign(self, sq, value, fixed_list):
+        fixed_list[sq] = value
+        self.forward_check(sq, value, fixed_list)
 
-        def __str__(self):
-            res = ""
-            for row in self.puzzle:
-                for square in row:
-                    if square.fixed:
-                        res += '{:>9}'.format(square.value)
-                    else:
-                        string = ''
-                        for x in square.domain:
-                            string += str(x)
-                        res +='{:>9}'.format(string)
-                    # res +='{:>9}'.format(square.value)  if square.fixed else '{:>9}'.format(str(square.domain))
-                res += "\n"
-            return res
-        
-        def clash(self, square):
-            row = self.row(square)
-            col = self.col(square)
-            for other in self.puzzle[row]:
-                if other.fixed and (other.value == square.value) and (other.id != square.id):
-                    return True
-            for a in self.puzzle:
-                other = a[col]
-                if other.fixed and (other.value == square.value) and (other.id != square.id):
-                    return True
-            coord = self.from_box_to_coord(self.get_box(square))
-            for i in range(0, 3):
-                for j in range(0, 3):
-                    x = coord[0] + i
-                    y = coord[1] + j
-                    other = self.puzzle[x][y]
-                    if other.fixed and (other.value == square.value) and (other.id != square.id):
-                        return True
-            return False
+    def unassign(self, sq, fixed_list):
+        if sq in fixed_list:
+            for (D, v) in self.temp[sq]:
+                self.domains[D].append(v)
+            self.temp[sq] = []
+            del fixed_list[sq]
 
+    def forward_check(self, sq, value, fixed_list):
+        for n in self.neighbours[sq]:
+            if n not in fixed_list:
+                if value in self.domains[n]:
+                    self.domains[n].remove(value)
+                    self.temp[sq].append((n, value))
 
-        def arc_consistency(self, pq):
-            nums = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-            while (len(pq) > 0):
-                curr = heappop(pq)
-                if self.clash(curr):
-                    return False
-                row = self.row(curr)
-                col = self.col(curr)
-                #print("ID =", curr.id, "Val =", curr.value, "|||", row, col, sq)
-                for other in self.puzzle[row]:
-                    other.constrict(curr.value)
-                    if len(other.domain) == 1:
-                        other.value = other.domain[0]
-                        other.fixed = True
-                        other.domain = []
-                        heappush(pq, other)
-                for a in self.puzzle:
-                    other = a[col]
-                    other.constrict(curr.value)
-                    if len(other.domain) == 1:
-                        other.value = other.domain[0]
-                        other.fixed = True
-                        other.domain = []
-                        heappush(pq, other)
-                coord = self.from_box_to_coord(self.get_box(curr))
-                for i in range(0, 3):
-                    for j in range(0, 3):
-                        x = coord[0] + i
-                        y = coord[1] + j
-                        other = self.puzzle[x][y]
-                        other.constrict(curr.value)
-                        if len(other.domain) == 1:
-                            other.value = other.domain[0]
+    @staticmethod
+    def constraint(xi, xj): return xi != xj
 
-                            other.fixed = True
-                            other.domain = []
-                            heappush(pq, other)
+    @staticmethod
+    def permutate(iterable):
+        result = list()
+        for L in range(0, len(iterable) + 1):
+            if L == 2:
+                for subset in itertools.permutations(iterable, L):
+                    result.append(subset)
+        return result
 
-                #only one
-                for num in nums:
-                    possibleSquares = []
-                    for other in self.puzzle[row]:
-                        if num in other.domain:
-                            possibleSquares.append(other)
-                    if len(possibleSquares) == 1:
-                        newSquare = possibleSquares[0]
-                        newSquare.value = num
-                        newSquare.fixed = True
-                        newSquare.domain = []
-                        heappush(pq, newSquare)
-
-                for num in nums:
-                    for col in range(0, 9):
-                        possibleSquares = []
-                        for a in self.puzzle:
-                            other = a[col]
-                            if num in other.domain:
-                                possibleSquares.append(other)
-                        if len(possibleSquares) == 1:
-                            newSquare = possibleSquares[0]
-                            newSquare.value = num
-                            newSquare.fixed = True
-                            newSquare.domain = []
-                            heappush(pq, newSquare)
-
-                for num in nums:
-                    for box in range(0, 9):
-                        possibleSquares = []
-                        coord = self.from_box_to_coord(box)
-                        for i in range(0, 3):
-                            for j in range(0, 3):
-                                x = coord[0] + i
-                                y = coord[1] + j
-                                other = self.puzzle[x][y]
-                                if num in other.domain:
-                                    possibleSquares.append(other)
-                        if len(possibleSquares) == 1:
-                            newSquare = possibleSquares[0]
-                            newSquare.value = num
-                            newSquare.fixed = True
-                            newSquare.domain = []
-                            heappush(pq, newSquare)
-                # while len(other_pq) > 0:
-                #     curr = heappop(other_pq)
-                #     if len(curr.domain) == 0:
-                #         #print(curr)
-                #         return False
-                #     else:
-                #         curr.value = curr.domain[0]
-                #         curr.fixed = True
-                #         curr.domain = []
-                #         heappush(pq, curr)
-
-
-            return True
-
-        def generate_search_queue(self):
-            pq = []
-            for row in self.puzzle:
-                for square in row:
-                    if not square.fixed:
-                        heappush(pq, square)
-            return pq
-
-        def init_arc_consistency(self):
-            pq = []
-            for row in self.puzzle:
-                for square in row:
-                    if square.fixed:
-                        heappush(pq, square)
-            return self.arc_consistency(pq)
-
-    def replace(self, node, replacement):
-        new_puzzle = copy.deepcopy(node.puzzle)
-        new_puzzle[node.row(replacement)][node.col(replacement)] = replacement
-        #print(super())
-        #print(self)
-        return self.SudokuNode(puzzleNode = new_puzzle)
-            
-            
-
-    def dfs(self, node):
-        if node.is_finished():
-            return node
-        # elif node.finishable():
-        else:
-            for square in node.generate_search_queue():
-                for each in square.domain:
-                    replacement = self.Square(
-                        id = square.id,
-                        domain = list(),
-                        fixed = True,
-                        value = each
-                    )
-                    new_node = self.replace(node, replacement)
-                    passed = new_node.arc_consistency([replacement])
-                    print(new_node)
-                    if passed:
-                        res = self.dfs(new_node)
-                    else:
-                        res = False
-                    if res:
-                        return res
-            return False
-        # else:
-        #     return False
+    @staticmethod
+    def conflicts(sudoku, sq, val):
+        count = 0
+        for n in sudoku.neighbours[sq]:
+            if len(sudoku.domains[n]) > 1 and val in sudoku.domains[n]:
+                count += 1
+        return count
 
     def solve(self):
-        #TODO: Your code here
-        squre_form = list()
-        for i in range(0,9):
-            squre_form.append(list())
-            for x in range(0,9):
-                if (self.puzzle[i][x] == 0):
-                    squre_form[i].append(self.Square(
-                        id      = i*9 + x,
-                        domain  = [x for x in range(1,10)],
-                        fixed   = False,
-                        value   = 0
-                        ))
+        def ac3(sudoku):
+            q = [x for x in self.squares if (self.get(x) != 0)]
+
+            while (len(q) > 0):
+                curr = q.pop(0)
+                val = self.get(curr)
+                for neighbour in self.neighbours[curr]:
+                    if val in self.domains[neighbour] and (neighbour != curr):
+                        self.domains[neighbour].remove(val)
+                        if len(self.domains[neighbour]) == 1:
+                            q.append(neighbour)
+                    if len(self.domains[neighbour]) == 0:
+                        return False
+            return True
+
+        def backtrack(fixed_list, sudoku):
+            if len(fixed_list) == len(sudoku.squares):
+                return fixed_list
+            var = select_unassigned_variable(fixed_list, sudoku)
+            for value in order_domain_values(sudoku, var):
+                if sudoku.consistent(fixed_list, var, value):
+                    sudoku.assign(var, value, fixed_list)
+                    result = backtrack(fixed_list, sudoku)
+                    if result:
+                        return result
+                    sudoku.unassign(var, fixed_list)
+            return False
+
+        # Most Constrained Variable heuristic
+        # Pick the unassigned variable that has fewest legal values remaining.
+        def select_unassigned_variable(fixed_list, sudoku):
+            unassigned = [v for v in sudoku.squares if v not in fixed_list]
+            return min(unassigned, key=lambda var: len(sudoku.domains[var]))
+
+        # Least Constraining Value heuristic
+        # Prefers the value that rules out the fewest choices for the neighboring variables in the constraint graph.
+        def order_domain_values(sudoku, var):
+            if len(sudoku.domains[var]) == 1:
+                return sudoku.domains[var]
+            return sorted(sudoku.domains[var], key=lambda val: sudoku.conflicts(sudoku, var, val))
+
+        if ac3(sudoku):
+            if sudoku.finished():
+                print(sudoku)
+            else:
+                # print(sudoku)
+                fixed_list = {}
+                for x in sudoku.squares:
+                    if len(sudoku.domains[x]) == 1:
+                        fixed_list[x] = sudoku.domains[x][0]
+                fixed_list = backtrack(fixed_list, sudoku)
+                for d in sudoku.domains:
+                    sudoku.domains[d] = fixed_list[d] 
+                if fixed_list:
+                    ls = []
+                    for x in range(0,9):
+                        ls.append([fixed_list[i+x*9] for i in range(0,9)])
                 else:
-                    squre_form[i].append(self.Square(
-                        id      = i*9+x,
-                        domain  = list(),
-                        fixed   = True,
-                        value   = self.puzzle[i][x]
-                        ))
+                    print("No solution exists")
 
-        initial_node = self.SudokuNode(
-            puzzleNode = squre_form
-        )
-
-        #print(initial_node)
-        initial_node.init_arc_consistency()
-        #print(initial_node)
-
-        ans = self.dfs(initial_node)
-        print(ans)
-
-
+        self.ans = ls
         # don't print anything here. just resturn the answer
         # self.ans is a list of lists
         return self.ans
-
     # you may add more classes/functions if you think is useful
     # However, ensure all the classes/functions are in this file ONLY
 
