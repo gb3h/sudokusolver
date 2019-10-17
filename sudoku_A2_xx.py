@@ -100,6 +100,7 @@ class Sudoku(object):
 
 
         def arc_consistency(self, pq):
+            nums = [1, 2, 3, 4, 5, 6, 7, 8, 9]
             while (len(pq) > 0):
                 curr = heappop(pq)
                 if self.clash(curr):
@@ -136,6 +137,50 @@ class Sudoku(object):
                             other.domain = []
                             heappush(pq, other)
 
+                #only one
+                for num in nums:
+                    possibleSquares = []
+                    for other in self.puzzle[row]:
+                        if num in other.domain:
+                            possibleSquares.append(other)
+                    if len(possibleSquares) == 1:
+                        newSquare = possibleSquares[0]
+                        newSquare.value = num
+                        newSquare.fixed = True
+                        newSquare.domain = []
+                        heappush(pq, newSquare)
+
+                for num in nums:
+                    for col in range(0, 9):
+                        possibleSquares = []
+                        for a in self.puzzle:
+                            other = a[col]
+                            if num in other.domain:
+                                possibleSquares.append(other)
+                        if len(possibleSquares) == 1:
+                            newSquare = possibleSquares[0]
+                            newSquare.value = num
+                            newSquare.fixed = True
+                            newSquare.domain = []
+                            heappush(pq, newSquare)
+
+                for num in nums:
+                    for box in range(0, 9):
+                        possibleSquares = []
+                        coord = self.from_box_to_coord(box)
+                        for i in range(0, 3):
+                            for j in range(0, 3):
+                                x = coord[0] + i
+                                y = coord[1] + j
+                                other = self.puzzle[x][y]
+                                if num in other.domain:
+                                    possibleSquares.append(other)
+                        if len(possibleSquares) == 1:
+                            newSquare = possibleSquares[0]
+                            newSquare.value = num
+                            newSquare.fixed = True
+                            newSquare.domain = []
+                            heappush(pq, newSquare)
                 # while len(other_pq) > 0:
                 #     curr = heappop(other_pq)
                 #     if len(curr.domain) == 0:
@@ -146,6 +191,8 @@ class Sudoku(object):
                 #         curr.fixed = True
                 #         curr.domain = []
                 #         heappush(pq, curr)
+
+
             return True
 
         def generate_search_queue(self):
