@@ -67,13 +67,43 @@ class Sudoku(object):
             res = ""
             for row in self.puzzle:
                 for square in row:
-                    res += " " + str(square.value) if square.fixed else " D" + str(len(square.domain))
+                    if square.fixed:
+                        res += '{:>9}'.format(square.value)
+                    else:
+                        string = ''
+                        for x in square.domain:
+                            string += str(x)
+                        res +='{:>9}'.format(string)
+                    # res +='{:>9}'.format(square.value)  if square.fixed else '{:>9}'.format(str(square.domain))
                 res += "\n"
             return res
+        
+        def clash(self, square):
+            row = self.row(square)
+            col = self.col(square)
+            for other in self.puzzle[row]:
+                if other.fixed and (other.value == square.value) and (other.id != square.id):
+                    return True
+            for a in self.puzzle:
+                other = a[col]
+                if other.fixed and (other.value == square.value) and (other.id != square.id):
+                    return True
+            coord = self.from_box_to_coord(self.get_box(square))
+            for i in range(0, 3):
+                for j in range(0, 3):
+                    x = coord[0] + i
+                    y = coord[1] + j
+                    other = self.puzzle[x][y]
+                    if other.fixed and (other.value == square.value) and (other.id != square.id):
+                        return True
+            return False
+
 
         def arc_consistency(self, pq):
             while (len(pq) > 0):
                 curr = heappop(pq)
+                if self.clash(curr):
+                    return False
                 row = self.row(curr)
                 col = self.col(curr)
                 #print("ID =", curr.id, "Val =", curr.value, "|||", row, col, sq)
@@ -101,9 +131,23 @@ class Sudoku(object):
                         other.constrict(curr.value)
                         if len(other.domain) == 1:
                             other.value = other.domain[0]
+
                             other.fixed = True
                             other.domain = []
                             heappush(pq, other)
+
+                # while len(other_pq) > 0:
+                #     curr = heappop(other_pq)
+                #     if len(curr.domain) == 0:
+                #         #print(curr)
+                #         return False
+                #     else:
+                #         curr.value = curr.domain[0]
+                #         curr.fixed = True
+                #         curr.domain = []
+                #         heappush(pq, curr)
+            return True
+
         def generate_search_queue(self):
             pq = []
             for row in self.puzzle:
@@ -120,17 +164,20 @@ class Sudoku(object):
                         heappush(pq, square)
             return self.arc_consistency(pq)
 
-        def replace(self, replacement):
-            new_puzzle = copy.deepcopy(self.puzzle)
-            new_puzzle[self.row(replacement.id)][self.col(replacement.id)] = replacement
-            return SudokuNode(puzzle = new_puzzle)
+    def replace(self, node, replacement):
+        new_puzzle = copy.deepcopy(node.puzzle)
+        new_puzzle[node.row(replacement)][node.col(replacement)] = replacement
+        #print(super())
+        #print(self)
+        return self.SudokuNode(puzzleNode = new_puzzle)
             
             
 
     def dfs(self, node):
         if node.is_finished():
             return node
-        elif node.finishable():
+        # elif node.finishable():
+        else:
             for square in node.generate_search_queue():
                 for each in square.domain:
                     replacement = self.Square(
@@ -139,12 +186,18 @@ class Sudoku(object):
                         fixed = True,
                         value = each
                     )
-                    new_node = node.replace(replacement)
-                    new_node.arc_consistency([replacement])
-                    res = self.dfs(new_node)
-            return res
-        else:
-            return
+                    new_node = self.replace(node, replacement)
+                    passed = new_node.arc_consistency([replacement])
+                    print(new_node)
+                    if passed:
+                        res = self.dfs(new_node)
+                    else:
+                        res = False
+                    if res:
+                        return res
+            return False
+        # else:
+        #     return False
 
     def solve(self):
         #TODO: Your code here
@@ -171,11 +224,12 @@ class Sudoku(object):
             puzzleNode = squre_form
         )
 
-        print(initial_node)
+        #print(initial_node)
         initial_node.init_arc_consistency()
-        print(initial_node)
+        #print(initial_node)
 
         ans = self.dfs(initial_node)
+        print(ans)
 
 
         # don't print anything here. just resturn the answer
