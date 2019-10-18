@@ -8,14 +8,21 @@ class Sudoku(object):
     def __str__(self):
         return str(self.domains)
 
+    # function get to return the value of a certain index, since we maintain indexes as 0-80
     def get(self, index):
         return self.puzzle[index//9][index%9]
 
     def __init__(self, puzzle):
         self.puzzle = puzzle
-        self.count = 0
         self.ans = copy.deepcopy(puzzle)
+
+        # dfs counter to keep track of recursive calls for statistics
+        self.count = 0
+
+        # squares are our individual cells, indexed from 0-80
         self.squares = [x for x in range(0, 81)]
+
+        # init domains with 1-9 unless fixed val
         self.domains = {}
         index = 0
         for row in self.puzzle:
@@ -26,6 +33,8 @@ class Sudoku(object):
                     self.domains[index] = [num]
                 index += 1
 
+
+        # calling neighbours[i] will get you all of i's neighbours
         self.neighbours = dict()
         for i in range(0, 81):
             row = Sudoku.row(i)
@@ -33,6 +42,7 @@ class Sudoku(object):
             sq = Sudoku.get_box(i)
             self.neighbours[i] = [x for x in range(0,81) if (Sudoku.row(x) == row) or (Sudoku.col(x) == col) or (Sudoku.get_box(x) == sq)]
 
+        # init temp tracker to track guesses
         self.temp = dict()
         for i in self.squares:
             if self.get(i) == 0:
@@ -40,6 +50,7 @@ class Sudoku(object):
             else:
                 self.temp[i] = [self.get(i)]
 
+    # helper function to get a node's col index 0-8
     @staticmethod
     def col(id):
         return id % 9
@@ -52,71 +63,60 @@ class Sudoku(object):
     def get_box(id):
         c = [[0,1,2],[3,4,5],[6,7,8]]
         return c[Sudoku.row(id)//3][Sudoku.col(id)//3]
-    @staticmethod
-    def from_box_to_coord(box):
-        c = [[0,0], [0,3], [0,6], [3,0], [3,3], [3,6], [6,0], [6,3], [6,6]]
-        return c[box]
 
+    # finished method to check if a search has reached goal state
+    # domain of every square should be length 1
     def finished(self):
         for x in self.squares:
             if len(self.domains[x]) > 1:
                 return False
         return True
 
-    def finishable(self, fixed_list):
-        for x in self.squares:
-            if len(self.domains[x]) > 1 and x not in fixed_list:
-                return False
-        return True
-
+    # whenever we make a guess, first check that the guess is consistent
     def consistent(self, fixed_list, sq, value):
-        for key, val in fixed_list.items():
-            if val == value and key in self.neighbours[sq]:
+        for sq, val in fixed_list.items():
+            if val == value and sq in self.neighbours[sq]:
                 consistent = False
         return True 
 
+    # when we make assignment, do a forward check to ensure neighbours are correct
     def assign(self, sq, value, fixed_list):
         fixed_list[sq] = value
-        self.forward_check(sq, value, fixed_list)
-
-    def unassign(self, sq, fixed_list):
-        if sq in fixed_list:
-            for (D, v) in self.temp[sq]:
-                self.domains[D].append(v)
-            self.temp[sq] = []
-            del fixed_list[sq]
-
-    def forward_check(self, sq, value, fixed_list):
         for n in self.neighbours[sq]:
-            if n not in fixed_list:
+            if not n in fixed_list:
                 if value in self.domains[n]:
                     self.domains[n].remove(value)
                     self.temp[sq].append((n, value))
 
-    @staticmethod
-    def constraint(xi, xj): return xi != xj
+    # if an assignment/guess fails, restore state from temp
+    def undo(self, sq, fixed_list):
+        if sq in fixed_list:
+            for (other_sq, val) in self.temp[sq]:
+                self.domains[other_sq].append(val)
+            self.temp[sq] = []
+            del fixed_list[sq]
 
-    @staticmethod
-    def permutate(iterable):
-        result = list()
-        for L in range(0, len(iterable) + 1):
-            if L == 2:
-                for subset in itertools.permutations(iterable, L):
-                    result.append(subset)
-        return result
-
-    @staticmethod
-    def conflicts(sudoku, sq, val):
+    # count num conflicts for our LCV heuristic
+    def count_conflicts(self, sq, val):
         count = 0
-        for n in sudoku.neighbours[sq]:
-            if len(sudoku.domains[n]) > 1 and val in sudoku.domains[n]:
+        for n in self.neighbours[sq]:
+            if len(self.domains[n]) > 1 and val in self.domains[n]:
                 count += 1
         return count
 
-    def solve(self):
-        def ac3(sudoku):
-            q = [x for x in self.squares if (self.get(x) != 0)]
+    # put our fixed squares into proper format
+    @staticmethod
+    def format_from_assignment(fixed_list):
+        ls = []
+        for x in range(0,9):
+            ls.append([fixed_list[i+x*9] for i in range(0,9)])
+        return ls
 
+    def solve(self):
+
+        # this is our ac3 algo
+        def make_arc_consistent(sudoku):
+            q = [x for x in self.squares if (self.get(x) != 0)]
             while (len(q) > 0):
                 curr = q.pop(0)
                 val = self.get(curr)
@@ -129,53 +129,48 @@ class Sudoku(object):
                         return False
             return True
 
-        def backtrack(fixed_list, sudoku):
+        def dfs(fixed_list, sudoku):
             sudoku.count += 1
-            if len(fixed_list) == len(sudoku.squares):
+            if len(fixed_list) == 81:
                 return fixed_list
-            var = select_unassigned_variable(fixed_list, sudoku)
-            for value in order_domain_values(sudoku, var):
-                if sudoku.consistent(fixed_list, var, value):
-                    sudoku.assign(var, value, fixed_list)
-                    result = backtrack(fixed_list, sudoku)
-                    if result:
-                        return result
-                    sudoku.unassign(var, fixed_list)
+            min_sq = get_MCV(fixed_list, sudoku)
+            for value in get_LCV(sudoku, min_sq):
+                if sudoku.consistent(fixed_list, min_sq, value):
+                    sudoku.assign(min_sq, value, fixed_list)
+                    res = dfs(fixed_list, sudoku)
+                    if res:
+                        return res
+                    sudoku.undo(min_sq, fixed_list)
             return False
 
-        # Most Constrained Variable heuristic
-        # Pick the unassigned variable that has fewest legal values remaining.
-        def select_unassigned_variable(fixed_list, sudoku):
-            unassigned = [v for v in sudoku.squares if v not in fixed_list]
-            return min(unassigned, key=lambda var: len(sudoku.domains[var]))
+        # LCV heuristic, makes choice within domain based on its impact on neighbours
+        def get_LCV(sudoku, sq):
+            ls = sorted(sudoku.domains[sq], key=lambda val: sudoku.count_conflicts(sq, val))
+            return sudoku.domains[sq] if (len(sudoku.domains) == 1) else ls
 
-        # Least Constraining Value heuristic
-        # Prefers the value that rules out the fewest choices for the neighboring variables in the constraint graph.
-        def order_domain_values(sudoku, var):
-            if len(sudoku.domains[var]) == 1:
-                return sudoku.domains[var]
-            return sorted(sudoku.domains[var], key=lambda val: sudoku.conflicts(sudoku, var, val))
+        # MCV heuristic, sorts by smallest domain for unfixed squares and returns the lowest
+        def get_MCV(fixed_list, sudoku):
+            unfixed_list = [sq for sq in sudoku.squares if not sq in fixed_list]
+            min_sq = min(unfixed_list, key=lambda i: len(sudoku.domains[i]))
+            return min_sq 
 
-        if ac3(sudoku):
-            if sudoku.finished():
-                print(sudoku)
-            else:
-                # print(sudoku)
+        if make_arc_consistent(sudoku):
+            if not sudoku.finished():
                 fixed_list = {}
                 for x in sudoku.squares:
                     if len(sudoku.domains[x]) == 1:
                         fixed_list[x] = sudoku.domains[x][0]
-                fixed_list = backtrack(fixed_list, sudoku)
+                fixed_list = dfs(fixed_list, sudoku)
                 for d in sudoku.domains:
                     sudoku.domains[d] = fixed_list[d] 
                 if fixed_list:
-                    ls = []
-                    for x in range(0,9):
-                        ls.append([fixed_list[i+x*9] for i in range(0,9)])
+                    ls = sudoku.format_from_assignment(fixed_list)
                 else:
-                    print("No solution exists")
+                    print("Unsolvable")
+            else:
+                ls = sudoku.format_from_assignment(sudoku.domains)
 
-        self.ans = ls
+        self.ans = (ls if ls else self.ans)
         # don't print anything here. just resturn the answer
         # self.ans is a list of lists
         return self.ans
