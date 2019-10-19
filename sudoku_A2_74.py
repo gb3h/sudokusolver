@@ -1,8 +1,8 @@
-import time
 import sys
 import copy
 import itertools
 from heapq import heappush, heappop
+# import time
 
 class Sudoku(object):
     def __str__(self):
@@ -17,7 +17,7 @@ class Sudoku(object):
         self.ans = copy.deepcopy(puzzle)
 
         # DFS counter to keep track of recursive calls for statistics
-        self.count = 0
+        # self.count = 0
 
         # Squares are our individual cells, indexed from 0-80
         self.squares = [x for x in range(0, 81)]
@@ -140,7 +140,7 @@ class Sudoku(object):
 
     def solve(self):
         def dfs(fixed_list, sudoku):
-            sudoku.count += 1
+            # sudoku.count += 1
             if len(fixed_list) == 81:
                 return fixed_list
             min_sq = sudoku.get_MCV(fixed_list)
@@ -201,12 +201,12 @@ if __name__ == "__main__":
                     i += 1
                     j = 0
 
-    a = time.time()
+    # a = time.time()
     sudoku = Sudoku(puzzle)
     ans = sudoku.solve()
-    b = time.time()
-    print("Time taken:", b-a)
-    print("Backtracking calls:", sudoku.count)
+    # b = time.time()
+    # print("Time taken:", b-a)
+    # print("Backtracking calls:", sudoku.count)
     with open(sys.argv[2], 'a') as f:
         for i in range(9):
             for j in range(9):
