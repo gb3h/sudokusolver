@@ -1,5 +1,6 @@
 # sudokusolver
-A simple project as part of CS3243 assignment
+A simple project as part of CS3243 AY19/20 Assignment 2.
+
 Run the script with 
 ```
 python sudoku_A2_74.py input.txt output.txt
