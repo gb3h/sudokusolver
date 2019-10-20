@@ -2,6 +2,7 @@ import sys
 import copy
 import itertools
 from heapq import heappush, heappop
+# import statistics
 # import time
 
 class Sudoku(object):
@@ -155,6 +156,12 @@ class Sudoku(object):
 
         if sudoku.make_arc_consistent():
             if not sudoku.finished():
+                # domain_len = []
+                # for each in sudoku.domains:
+                #     if len(sudoku.domains[each]) > 1:
+                #         zz.append(len(sudoku.domains[each]))
+                # print(statistics.mean(domain_len))
+                # print(statistics.median(domain_len))
                 fixed_list = {}
                 for x in sudoku.squares:
                     if len(sudoku.domains[x]) == 1:
